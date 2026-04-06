@@ -5,9 +5,8 @@ import in.chaurasiya.moneymanager.Service.ExpenseService;
 import in.chaurasiya.moneymanager.Service.IncomeService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize; // ✅ ADD
+import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 
@@ -20,6 +19,8 @@ public class ExcelController {
     private final IncomeService incomeService;
     private final ExpenseService expenseService;
 
+    // ✅ ANALYST + ADMIN
+    @PreAuthorize("hasAnyRole('ADMIN','ANALYST')")
     @GetMapping("/download/income")
     public void downloadIncomeExcel(HttpServletResponse response) throws IOException {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -27,6 +28,8 @@ public class ExcelController {
         excelService.writeIncomesToExcel(response.getOutputStream(), incomeService.getCurrentMonthIncomesForCurrentUser());
     }
 
+    // ✅ ANALYST + ADMIN
+    @PreAuthorize("hasAnyRole('ADMIN','ANALYST')")
     @GetMapping("/download/expense")
     public void downloadExpenseExcel(HttpServletResponse response) throws IOException {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

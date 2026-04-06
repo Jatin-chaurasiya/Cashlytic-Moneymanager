@@ -14,4 +14,5 @@ public class FilterDTO {
     private String keyword;
     private String sortField;
     private String sortOrder;
+    private Long targetUserId;
 }

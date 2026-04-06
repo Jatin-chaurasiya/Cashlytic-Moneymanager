@@ -34,14 +34,15 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
         final String authHeader = request.getHeader("Authorization");
 
+
         String email = null;
         String jwt = null;
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             jwt = authHeader.substring(7);
-
             try {
                 email = jwtUtil.extractUsername(jwt);
+
             } catch (Exception e) {
                 log.warn("JWT extraction failed: {}", e.getMessage());
             }

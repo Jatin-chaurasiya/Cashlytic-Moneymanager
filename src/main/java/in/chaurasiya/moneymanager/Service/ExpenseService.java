@@ -23,8 +23,8 @@ public class ExpenseService {
     private final ProfileService profileService;
 
     // Adds a new expense to the database
-    public ExpenseDTO addExpense(ExpenseDTO dto) {
-        ProfileEntity profile = profileService.getCurrentProfile();
+    public ExpenseDTO addExpense(ExpenseDTO dto, Long targetUserId) {
+        ProfileEntity profile = profileService.resolveTargetProfile(targetUserId); // ← changed
         CategoryEntity category = categoryRepository.findById(dto.getCategoryId())
                 .orElseThrow(() -> new RuntimeException("Category not found"));
         ExpenseEntity newExpense = toEntity(dto, profile, category);
@@ -35,10 +35,9 @@ public class ExpenseService {
     // Retrieves all expenses for current month/based on the start date and end date
     public List<ExpenseDTO> getCurrentMonthExpensesForCurrentUser() {
         ProfileEntity profile = profileService.getCurrentProfile();
-        LocalDate now = LocalDate.now();
-        LocalDate startDate = now.withDayOfMonth(1);
-        LocalDate endDate = now.withDayOfMonth(now.lengthOfMonth());
-        List<ExpenseEntity> list = expenseRepository.findByProfileIdAndDateBetween(profile.getId(), startDate, endDate);
+        // ← date filter hata do
+        List<ExpenseEntity> list = expenseRepository
+                .findByProfileIdOrderByDateDesc(profile.getId());
         return list.stream().map(this::toDTO).toList();
     }
 
@@ -68,15 +67,41 @@ public class ExpenseService {
     }
 
     //filter expenses
-    public List<ExpenseDTO> filterExpenses(LocalDate startDate, LocalDate endDate, String keyword, Sort sort) {
-        ProfileEntity profile = profileService.getCurrentProfile();
-        List<ExpenseEntity> list = expenseRepository.findByProfileIdAndDateBetweenAndNameContainingIgnoreCase(profile.getId(), startDate, endDate, keyword, sort);
+    public List<ExpenseDTO> filterExpenses(LocalDate startDate, LocalDate endDate,
+                                           String keyword, Sort sort, Long targetUserId) {
+        ProfileEntity profile = profileService.resolveTargetProfile(targetUserId); // ← changed
+        List<ExpenseEntity> list = expenseRepository
+                .findByProfileIdAndDateBetweenAndNameContainingIgnoreCase(
+                        profile.getId(), startDate, endDate, keyword, sort);
         return list.stream().map(this::toDTO).toList();
     }
 
 //    Notification Service
     public List<ExpenseDTO> getExpensesForUserOnDate(Long profileId,LocalDate date){
         List<ExpenseEntity> list = expenseRepository.findByProfileIdAndDate(profileId,date);
+        return list.stream().map(this::toDTO).toList();
+    }
+    public List<ExpenseDTO> getLatest5ExpensesForUser(Long profileId) {
+        List<ExpenseEntity> list = expenseRepository.findTop5ByProfileIdOrderByDateDesc(profileId);
+        return list.stream().map(this::toDTO).toList();
+    }
+
+    public List<ExpenseDTO> getExpensesForAdmin() {
+        List<ExpenseEntity> list = expenseRepository.findAll();
+        return list.stream().map(this::toDTO).toList();
+    }
+
+    public BigDecimal getTotalExpenseForUser(Long profileId) {
+        BigDecimal total = expenseRepository.findTotalExpenseByProfileId(profileId);
+        return total != null ? total : BigDecimal.ZERO;
+    }
+    public List<ExpenseDTO> getExpenses(Long targetUserId) {
+
+        ProfileEntity profile = profileService.resolveTargetProfile(targetUserId);
+
+        List<ExpenseEntity> list =
+                expenseRepository.findByProfileIdOrderByDateDesc(profile.getId());
+
         return list.stream().map(this::toDTO).toList();
     }
 
@@ -92,15 +117,17 @@ public class ExpenseService {
                 .build();
     }
 
+    // toDTO mein profileName add karo:
     private ExpenseDTO toDTO(ExpenseEntity entity) {
         return ExpenseDTO.builder()
                 .id(entity.getId())
                 .name(entity.getName())
                 .icon(entity.getIcon())
-                .categoryId(entity.getCategory() != null ? entity.getCategory().getId(): null)
-                .categoryName(entity.getCategory() != null ? entity.getCategory().getName(): "N/A")
+                .categoryId(entity.getCategory() != null ? entity.getCategory().getId() : null)
+                .categoryName(entity.getCategory() != null ? entity.getCategory().getName() : "N/A")
                 .amount(entity.getAmount())
                 .date(entity.getDate())
+                .profileName(entity.getProfile().getFullName()) // ← ADD
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();

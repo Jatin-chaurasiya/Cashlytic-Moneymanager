@@ -1,6 +1,7 @@
 package in.chaurasiya.moneymanager.Service;
 
 import in.chaurasiya.moneymanager.Entity.ProfileEntity;
+import in.chaurasiya.moneymanager.Entity.Role;
 import in.chaurasiya.moneymanager.Repository.ProfileRepository;
 import in.chaurasiya.moneymanager.Util.JwtUtil;
 import in.chaurasiya.moneymanager.dto.AuthDTO;
@@ -15,6 +16,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -33,12 +35,18 @@ public class ProfileService {
 
     public ProfileDTO registerProfile(ProfileDTO profileDTO) {
         ProfileEntity newProfile = toEntity(profileDTO);
+
+        newProfile.setRole(Role.ANALYST);
+
         newProfile.setActivationToken(UUID.randomUUID().toString());
         newProfile = profileRepository.save(newProfile);
+
         String activationLink = activationURL+"/api/v1.0/activate?token=" + newProfile.getActivationToken();
         String subject = "Activate your Money Manager account";
         String body = "Click on the following link to activate your account: " + activationLink;
+
         emailService.sendEmail(newProfile.getEmail(), subject, body);
+
         return toDTO(newProfile);
     }
 
@@ -60,15 +68,32 @@ public class ProfileService {
                 .fullName(profileEntity.getFullName())
                 .email(profileEntity.getEmail())
                 .profileImageUrl(profileEntity.getProfileImageUrl())
+                .banned(profileEntity.isBanned())
                 .createdAt(profileEntity.getCreatedAt())
                 .updatedAt(profileEntity.getUpdatedAt())
                 .build();
+    }
+    public List<ProfileDTO> getAllAnalysts() {
+        return profileRepository.findByRole(Role.ANALYST)
+                .stream()
+                .map(this::toDTO)
+                .toList();
+    }
+
+    public ProfileEntity resolveTargetProfile(Long targetUserId) {
+        ProfileEntity currentProfile = getCurrentProfile();
+
+        if (currentProfile.getRole() == Role.ADMIN && targetUserId != null) {
+            return profileRepository.findById(targetUserId)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+        }
+        return currentProfile;
     }
 
     public boolean activateProfile(String activationToken) {
         return profileRepository.findByActivationToken(activationToken)
                 .map(profile -> {
-                    profile.setIsActive(true);  // here Check account is activate or not..
+                    profile.setIsActive(true);
                     profileRepository.save(profile);
                     return true;
                 })
@@ -85,6 +110,20 @@ public class ProfileService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return profileRepository.findByEmail(authentication.getName())
                 .orElseThrow(() -> new UsernameNotFoundException("Profile not found with email: " + authentication.getName()));
+    }
+
+    public void banUser(Long profileId) {
+        ProfileEntity profile = profileRepository.findById(profileId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        profile.setBanned(true);
+        profileRepository.save(profile);
+    }
+
+    public void unbanUser(Long profileId) {
+        ProfileEntity profile = profileRepository.findById(profileId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        profile.setBanned(false);
+        profileRepository.save(profile);
     }
 
     public ProfileDTO getPublicProfile(String email) {
@@ -107,16 +146,35 @@ public class ProfileService {
     }
 
     public Map<String, Object> authenticateAndGenerateToken(AuthDTO authDTO) {
+
+        // ✅ FIRST: user fetch karo
+        ProfileEntity user = profileRepository.findByEmail(authDTO.getEmail())
+                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
+
+        // ✅ SECOND: banned check
+        if (user.isBanned()) {
+            throw new RuntimeException("You are banned. Please contact admin.");
+        }
+
+        // ✅ THIRD: password authenticate
         try {
-            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(authDTO.getEmail(), authDTO.getPassword()));
-            //Generate JWT token
-            String token = jwtUtil.generateToken(authDTO.getEmail());
-            return Map.of(
-                    "token", token,
-                    "user", getPublicProfile(authDTO.getEmail())
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            authDTO.getEmail(),
+                            authDTO.getPassword()
+                    )
             );
         } catch (Exception e) {
             throw new RuntimeException("Invalid email or password");
         }
+
+        // ✅ LAST: token generate
+        String token = jwtUtil.generateToken(authDTO.getEmail(), user.getRole().name());
+
+        return Map.of(
+                "token", token,
+                "role", user.getRole(),
+                "user", getPublicProfile(authDTO.getEmail())
+        );
     }
 }

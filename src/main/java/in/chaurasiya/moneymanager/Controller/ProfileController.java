@@ -1,14 +1,15 @@
 package in.chaurasiya.moneymanager.Controller;
 
-
 import in.chaurasiya.moneymanager.Service.ProfileService;
 import in.chaurasiya.moneymanager.dto.AuthDTO;
 import in.chaurasiya.moneymanager.dto.ProfileDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize; // ✅ ADD
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -50,10 +51,31 @@ public class ProfileController {
         }
     }
 
+    @GetMapping("/profiles/analysts")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<ProfileDTO>> getAllAnalysts() {
+        return ResponseEntity.ok(profileService.getAllAnalysts());
+    }
+
+    // ✅ SECURE THIS (logged-in users only)
+    @PreAuthorize("hasAnyRole('ADMIN','ANALYST',)")
     @GetMapping("/profile")
     public ResponseEntity<ProfileDTO> getPublicProfile() {
         ProfileDTO profileDTO = profileService.getPublicProfile(null);
         return ResponseEntity.ok(profileDTO);
     }
-}
 
+    @PutMapping("/profiles/analysts/{id}/ban")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> banUser(@PathVariable Long id) {
+        profileService.banUser(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/profiles/analysts/{id}/unban")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> unbanUser(@PathVariable Long id) {
+        profileService.unbanUser(id);
+        return ResponseEntity.ok().build();
+    }
+}

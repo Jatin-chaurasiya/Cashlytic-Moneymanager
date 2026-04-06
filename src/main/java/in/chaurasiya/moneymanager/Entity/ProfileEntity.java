@@ -26,6 +26,10 @@ public class ProfileEntity {
     private String email;
     private String password;
     private String profileImageUrl;
+
+    @Column(nullable = false)
+    private boolean banned = false;
+
     @Column(updatable = false)
     @CreationTimestamp
     private LocalDateTime createdAt;
@@ -33,6 +37,8 @@ public class ProfileEntity {
     private LocalDateTime updatedAt;
     private Boolean isActive;
     private String activationToken;
+    @Enumerated(EnumType.STRING)
+    private Role role;
 
     @PrePersist
     public void prePersist() {

@@ -24,13 +24,13 @@ public class IncomeService {
     private final ProfileService profileService;
 
     // Adds a new expense to the database
-    public IncomeDTO addIncome(IncomeDTO dto) {
-        ProfileEntity profile = profileService.getCurrentProfile();
+    public IncomeDTO addIncome(IncomeDTO dto, Long targetUserId) {
+        ProfileEntity profile = profileService.resolveTargetProfile(targetUserId);
         CategoryEntity category = categoryRepository.findById(dto.getCategoryId())
                 .orElseThrow(() -> new RuntimeException("Category not found"));
-        IncomeEntity newExpense = toEntity(dto, profile, category);
-        newExpense = incomeRepository.save(newExpense);
-        return toDTO(newExpense);
+        IncomeEntity newIncome = toEntity(dto, profile, category);
+        newIncome = incomeRepository.save(newIncome);
+        return toDTO(newIncome);
     }
 
     // Retrieves all incomes for current month/based on the start date and end date
@@ -53,6 +53,27 @@ public class IncomeService {
         }
         incomeRepository.delete(entity);
     }
+    public List<IncomeDTO> getIncomes(Long targetUserId) {
+
+        ProfileEntity profile = profileService.resolveTargetProfile(targetUserId);
+
+        LocalDate now = LocalDate.now();
+        LocalDate startDate = now.withDayOfMonth(1);
+        LocalDate endDate = now.withDayOfMonth(now.lengthOfMonth());
+
+        List<IncomeEntity> list =
+                incomeRepository.findByProfileIdAndDateBetween(
+                        profile.getId(), startDate, endDate);
+
+        return list.stream().map(this::toDTO).toList();
+    }
+
+    public List<IncomeDTO> getIncomesForAdmin() {
+
+        List<IncomeEntity> list = incomeRepository.findAll();
+
+        return list.stream().map(this::toDTO).toList();
+    }
 
     // Get latest 5 incomes for current user
     public List<IncomeDTO> getLatest5IncomesForCurrentUser() {
@@ -67,11 +88,22 @@ public class IncomeService {
         BigDecimal total = incomeRepository.findTotalExpenseByProfileId(profile.getId());
         return total != null ? total: BigDecimal.ZERO;
     }
+    public List<IncomeDTO> getLatest5IncomesForUser(Long profileId) {
+        List<IncomeEntity> list = incomeRepository.findTop5ByProfileIdOrderByDateDesc(profileId);
+        return list.stream().map(this::toDTO).toList();
+    }
 
+    public BigDecimal getTotalIncomeForUser(Long profileId) {
+        BigDecimal total = incomeRepository.findTotalExpenseByProfileId(profileId);
+        return total != null ? total : BigDecimal.ZERO;
+    }
     //filter incomes
-    public List<IncomeDTO> filterIncomes(LocalDate startDate, LocalDate endDate, String keyword, Sort sort) {
-        ProfileEntity profile = profileService.getCurrentProfile();
-        List<IncomeEntity> list = incomeRepository.findByProfileIdAndDateBetweenAndNameContainingIgnoreCase(profile.getId(), startDate, endDate, keyword, sort);
+    public List<IncomeDTO> filterIncomes(LocalDate startDate, LocalDate endDate,
+                                         String keyword, Sort sort, Long targetUserId) {
+        ProfileEntity profile = profileService.resolveTargetProfile(targetUserId); // ← changed
+        List<IncomeEntity> list = incomeRepository
+                .findByProfileIdAndDateBetweenAndNameContainingIgnoreCase(
+                        profile.getId(), startDate, endDate, keyword, sort);
         return list.stream().map(this::toDTO).toList();
     }
     // Update Income
@@ -114,6 +146,7 @@ public class IncomeService {
                 .categoryName(entity.getCategory() != null ? entity.getCategory().getName(): "N/A")
                 .amount(entity.getAmount())
                 .date(entity.getDate())
+                .profileName(entity.getProfile().getFullName())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();

@@ -18,6 +18,7 @@ public class ProfileDTO {
     private String email;
     private String password;
     private String profileImageUrl;
+    private boolean banned;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

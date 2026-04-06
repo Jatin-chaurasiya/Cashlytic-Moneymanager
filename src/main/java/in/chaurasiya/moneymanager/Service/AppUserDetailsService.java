@@ -17,18 +17,15 @@ public class AppUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-
         ProfileEntity existingProfile = profileRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Profile not found with email: " + email));
-
-        if (existingProfile.getIsActive() == null || !existingProfile.getIsActive()) {
-            throw new UsernameNotFoundException("Account is not activated for email: " + email);
-        }
 
         return User.builder()
                 .username(existingProfile.getEmail())
                 .password(existingProfile.getPassword())
-                .roles("USER")
+                .roles(existingProfile.getRole().name())
+                .disabled(existingProfile.getIsActive() == null || !existingProfile.getIsActive())
+                .accountLocked(existingProfile.isBanned())   // ← ADD
                 .build();
     }
 }
